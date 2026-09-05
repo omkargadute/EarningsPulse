@@ -127,6 +127,8 @@ For each ticker, analyze historical earnings reactions:
 - Average time to bottom (minutes/hours after release)
 - Average recovery size after the dip
 - Pattern classification label
+- **Monte Carlo bootstrap** — p10/p50/p90 bands for final move and max dip from resampled historical events (`monte_carlo.py`)
+- **Out-of-sample validation** — chronological train/test split to flag unstable or overfit archetypes (`reaction_validation.py`)
 
 **Example output:**
 
@@ -239,7 +241,7 @@ Research   Forecast    Reaction     Spillover
 |-------|---------------|---------------|
 | Research | Gather last quarter data, recent news, analyst context | Tavily, SEC EDGAR, earnings APIs |
 | Forecast | Beat/miss sentiment, surprise factors, key metrics | LLM + Research output |
-| Reaction | Historical AH/PM price paths around past earnings | yfinance, earnings date API |
+| Reaction | Historical price paths, archetypes, Monte Carlo, validation, chart payload | yfinance, reaction_analyzer, monte_carlo, reaction_chart |
 | Spillover | Peer identification and co-movement analysis | Sector map, correlation engine, Tavily |
 | Synthesis | Merge outputs, resolve conflicts, assign confidence | LLM + all agent outputs |
 
@@ -453,4 +455,4 @@ No dependency on specific tickers (NVIDIA, Marvell, IREN) unless they happen to 
 
 ---
 
-Document version 1.2. Created September 3, 2026. Branding and layout updated September 4, 2026.
+Document version 1.3. Created September 3, 2026. Branding and layout updated September 4, 2026. Reaction intelligence (Monte Carlo, validation, chart workspace) documented September 5, 2026.
