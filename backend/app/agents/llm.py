@@ -49,6 +49,20 @@ class LLMClient:
             HumanMessage(content=user_prompt),
         ]
 
+        provider = (getattr(self._settings, "llm_provider", "openai") or "openai").lower().strip()
+        if provider == "google" and self._settings.google_api_key:
+            try:
+                return await self._invoke_google(messages, fallback)
+            except Exception as exc:
+                logger.warning("Google LLM invocation failed: %s", exc)
+                if self._settings.openai_api_key:
+                    logger.info("Trying OpenAI LLM fallback")
+                    try:
+                        return await self._invoke_openai(messages, fallback)
+                    except Exception as openai_exc:
+                        logger.warning("OpenAI LLM invocation failed: %s — using fallback", openai_exc)
+                return fallback
+
         if self._settings.openai_api_key:
             try:
                 return await self._invoke_openai(messages, fallback)

@@ -38,7 +38,8 @@ class Settings(BaseSettings):
     anthropic_api_key: str | None = None
     llm_model: str = "gpt-4o"
     google_api_key: str | None = None
-    google_llm_model: str = "gemma-4-31b-it"
+    google_llm_model: str = "gemini-2.5-flash"
+    llm_provider: str = "openai"
 
     # Hackathon partners
     tavily_api_key: str | None = None
