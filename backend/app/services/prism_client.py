@@ -9,7 +9,7 @@ from typing import Any
 import httpx
 
 from app.config import Settings, get_settings
-from app.models.trace import TraceEvent, TraceLog
+from app.models.trace import TraceLog
 from app.services.trace_store import trace_event_to_prism_step
 
 logger = logging.getLogger(__name__)
@@ -31,8 +31,6 @@ class PrismClient:
         self._local_mode = not self._settings.prism_enabled
         self._http: httpx.AsyncClient | None = None
         self._sdk: Any | None = None
-        self._buffers: dict[str, list[TraceEvent]] = {}
-        self._lock = asyncio.Lock()
 
         if not self._local_mode:
             self._init_sdk()
@@ -67,19 +65,6 @@ class PrismClient:
             logger.warning("PRISM SDK initialization failed: %s — falling back to REST", exc)
             self._sdk = None
 
-    async def emit(self, event: TraceEvent | dict[str, Any]) -> None:
-        """Buffer a trace event for batch sync to PRISM."""
-        if isinstance(event, TraceEvent):
-            trace_event = event
-        else:
-            trace_event = TraceEvent.model_validate(event)
-
-        if self._local_mode:
-            return
-
-        async with self._lock:
-            self._buffers.setdefault(trace_event.job_id, []).append(trace_event)
-
     async def sync_trace_log(self, trace_log: TraceLog) -> bool:
         """
         Submit a complete trace log to PRISM and mark sync status.
@@ -106,9 +91,6 @@ class PrismClient:
 
             if synced:
                 await self._submit_summary_trace(trace_log, steps)
-
-            async with self._lock:
-                self._buffers.pop(trace_log.job_id, None)
 
             if synced:
                 logger.info("PRISM sync completed for job %s", trace_log.job_id)

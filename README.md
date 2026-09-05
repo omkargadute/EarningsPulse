@@ -4,7 +4,7 @@ Know the report. Read the reaction. Watch the ripple.
 
 Pre-earnings research agent that builds an Earnings Playbook covering report sentiment, price-reaction scenarios, and peer spillover. Built for the [AI x FINANCE HACKATHON – MONEY TALKS](https://luma.com/vljpdtre) (Money Intelligence track).
 
-All build phases are on `main`. Deploy with [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md). Demo with [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md).
+Deploy with [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md). Demo with [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md).
 
 ## Overview
 
@@ -16,7 +16,7 @@ EarningsPulse prepares investors for after-hours earnings. Before a company repo
 4. Maps peers that tend to move in sympathy
 5. Synthesizes a structured Earnings Playbook with sources, scenarios, and export
 
-Each agent step streams over SSE and is logged in PRISM-compatible trace format.
+Agent traces reach SSE clients after each graph node finishes. Completed runs save a local JSON trace and optionally submit it to PRISM.
 
 ## Architecture
 
@@ -51,7 +51,8 @@ flowchart TB
   Trace --> API
   Viewer --> API
   API --> Orch
-  Orch --> R & F & Rx & S --> Syn
+  Orch --> R & Rx
+  R & Rx --> F --> S --> Syn
   R --> Tavily & EDGAR
   F --> OAI
   Rx & S --> YF
@@ -63,7 +64,7 @@ flowchart TB
 |-------|-------|
 | Frontend | Next.js 16, React 19, TypeScript 7, Tailwind CSS, lightweight-charts, oxlint, Knip, Bun |
 | Backend | FastAPI, LangGraph, Pydantic v2 |
-| LLM | OpenAI GPT-4o |
+| LLM | Configured provider via `LLM_PROVIDER`, then the other provider, then a deterministic heuristic |
 | Research | Tavily Search API |
 | Market data | yfinance, Finnhub |
 | Observability | PRISM (Block Convey) + local trace logs |
@@ -134,31 +135,24 @@ bun run dev
 
 Install [Bun](https://bun.sh/) if needed: `curl -fsSL https://bun.sh/install | bash`
 
-Bun is the package manager only. Next.js 16.3 still builds and runs on Node (Vercel Functions, `next start`, and the standalone Docker image). Do not set `bunVersion` in `vercel.json` or use `bun run --bun next build`. Next 16.2/16.3 still has Bun-runtime regressions on Vercel.
+Use Bun for dependency installation and scripts. The checked-in Next.js build and deployment configurations run Next.js on Node.
 
 ## Production deployment
 
-Deploy the frontend to Vercel and the backend to Railway or Render.
+Deploy the frontend to Vercel. The backend has Modal, Railway, and Render configurations.
 
 Full guide: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)
 
 Checklist:
 
 1. Deploy backend from `backend/` (Dockerfile included)
-2. Set `FRONTEND_URL`, `OPENAI_API_KEY`, `TAVILY_API_KEY`, `FINNHUB_API_KEY`, `SEC_USER_AGENT`
+2. Configure CORS and provider keys using the deployment guide.
 3. Deploy frontend from `frontend/` to Vercel
 4. Set `NEXT_PUBLIC_BACKEND_URL` to your backend URL
 5. Verify:
 
 ```bash
 ./scripts/verify_deployment.sh https://your-api.up.railway.app https://your-app.vercel.app
-```
-
-Tag a release after verification:
-
-```bash
-git tag -a v1.0.0 -m "EarningsPulse v1.0.0 hackathon release"
-git push origin v1.0.0
 ```
 
 ## Demo
@@ -223,9 +217,9 @@ curl http://localhost:8000/api/playbook/<job_id>
 
 | Key | Purpose | Required for |
 |-----|---------|--------------|
-| `OPENAI_API_KEY` | LLM agents | Live generation |
-| `TAVILY_API_KEY` | Live web research | Live generation |
-| `FINNHUB_API_KEY` | Earnings calendar | Live generation (yfinance fallback) |
+| `OPENAI_API_KEY` or `GOOGLE_API_KEY` | LLM forecast | Optional; otherwise uses heuristic forecast |
+| `TAVILY_API_KEY` | Live web research | News and analyst context; agents use fallbacks without it |
+| `FINNHUB_API_KEY` | Earnings calendar | Upcoming calendar endpoint; ticker lookups can fall back to yfinance |
 | `SEC_USER_AGENT` | SEC EDGAR access | Live generation |
 | `PRISM_API_KEY` + `PRISM_PROJECT_ID` | Agent observability | Optional |
 
@@ -243,6 +237,9 @@ cd backend && uv run python -m pytest
 cd backend && uv run ruff check app tests && uv run ruff format --check app tests
 cd backend && uv run ty check
 
+# Check backend dependency usage
+cd backend && uv run deptry .
+
 # Frontend property tests (Hegel via Vitest)
 cd frontend && bun run test:property
 
@@ -254,9 +251,6 @@ cd frontend && bun run knip
 
 # React Doctor health scan
 cd frontend && bun run doctor
-
-# Vercel plugin for Cursor/Claude (skills, /deploy, /env, /status)
-npx plugins add vercel/vercel-plugin --yes --target cursor --scope project
 
 # Typecheck frontend (TypeScript 7 / tsc)
 cd frontend && bun run typecheck
@@ -271,13 +265,9 @@ SKIP_E2E=1 ./scripts/run_tests.sh
 cd frontend && bunx playwright install chromium && bun run test:e2e
 ```
 
-CI (GitHub Actions) on every push/PR to `main`: backend ruff + ty + pytest, then frontend property tests / oxlint / Knip / `tsc --noEmit` / build, then Playwright E2E. A separate [React Doctor](https://www.react.doctor/ci) workflow scans `frontend/` on PRs (advisory, changed-files only).
+CI (GitHub Actions) on every push/PR to `main`: backend ruff + Deptry + ty + pytest, then frontend property tests / oxlint / Knip / `tsc --noEmit` / build, then Playwright E2E. A separate [React Doctor](https://www.react.doctor/ci) workflow scans `frontend/` on PRs (advisory, changed-files only).
 
 Toolchain: uv + ruff + ty on the backend; Bun + oxc/oxlint + [Knip](https://github.com/webpro-nl/knip) + TypeScript 7 on the frontend.
-
-oxlint is a CI/dev linter, not a deploy runtime. Next 16 Turbopack already uses oxc as its parser. This repo is a single Next app plus a Python/uv backend, so Turborepo would not orchestrate anything Vercel or uv do not already handle.
-
-Next.js 16.3 type-checks `next build` with the project-local TypeScript 7 `tsc` CLI.
 
 Backtest validation:
 
@@ -294,21 +284,6 @@ uv run python ../scripts/backtest_reactions.py --tickers AAPL NVDA TSLA JPM AMZN
 | [IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md) | Build plan and phases |
 | [DEPLOYMENT.md](docs/DEPLOYMENT.md) | Production deploy guide |
 | [DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md) | 3-minute hackathon pitch |
-
-## Implementation phases
-
-| Phase | Status | Description |
-|-------|--------|-------------|
-| 0 | Done | Foundation: scaffold, models, health checks |
-| 1 | Done | Data layer: Tavily, yfinance, Finnhub, EDGAR |
-| 2 | Done | Analysis engines: reaction analyzer, peer map |
-| 3 | Done | Agents: LangGraph orchestrator + 5 agents |
-| 4 | Done | API: playbook generation + SSE streaming |
-| 5 | Done | PRISM observability integration |
-| 6 | Done | Frontend UI |
-| 7 | Done | Polish: export, calendar, demo seed |
-| 8 | Done | Testing: E2E, backtest validation, CI |
-| 9 | Done | Deploy: configs, docs, demo script |
 
 ## Disclaimer
 

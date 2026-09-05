@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from datetime import date, timedelta
 from statistics import mean
 
@@ -220,7 +221,8 @@ class PeerMapService:
         ]
 
         peer_tickers = [peer for peer, _, _, _ in all_candidate_peers]
-        bars_by_ticker = self._load_correlation_bars(
+        bars_by_ticker = await asyncio.to_thread(
+            self._load_correlation_bars,
             normalized,
             peer_tickers,
             earnings_dates,
