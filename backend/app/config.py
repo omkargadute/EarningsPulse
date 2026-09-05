@@ -31,6 +31,7 @@ class Settings(BaseSettings):
         "http://localhost:3000",
         "http://127.0.0.1:3000",
     ]
+    cors_origin_regex: str | None = None
 
     # LLM
     openai_api_key: str | None = None

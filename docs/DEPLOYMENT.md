@@ -2,6 +2,18 @@
 
 Production: Vercel for the frontend, Railway or Render for the backend. Docker Compose is still the easiest local path.
 
+The backend can also run as a Modal web function while the frontend remains on Vercel:
+
+```bash
+modal deploy backend/modal_app.py
+```
+
+The initial Modal configuration accepts HTTPS origins under `vercel.app`, which makes
+Vercel preview deployments work. After the frontend has a stable production domain,
+replace `CORS_ORIGIN_REGEX` in `backend/modal_app.py` with an exact `FRONTEND_URL` and
+redeploy. Set the frontend's `NEXT_PUBLIC_BACKEND_URL` to the `modal.run` URL printed by
+the deploy command, then redeploy the frontend because this value is baked in at build time.
+
 ## Architecture (production)
 
 ```mermaid
