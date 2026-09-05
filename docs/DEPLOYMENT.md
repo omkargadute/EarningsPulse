@@ -22,7 +22,15 @@ Jobs and their traces live in the API process. A restart loses generated playboo
 
 `TraceStore` also writes JSON files. Modal writes these to `/tmp/logs/traces` without a persistent volume, so they do not survive container replacement. These files contain traces, not recoverable playbooks. Download exports before relying on a saved run.
 
-Store provider keys in the Modal secret named `earningspulse` (`modal secret create earningspulse --from-dotenv backend/.env --force`). The deploy also merges a local `backend/.env` if present. Redeploy after changing either. The bundled AAPL demo needs no credentials. Set `LLM_PROVIDER=google` to try Google before OpenAI; the default order is OpenAI then Google.
+Store provider keys in the Modal secret named `earningspulse`:
+
+```bash
+cd backend
+uv run modal secret create earningspulse --from-dotenv .env --force
+uv run modal deploy modal_app.py
+```
+
+Do not attach a local `.env` via `Secret.from_dotenv` in `modal_app.py`. That makes the secret list differ between your laptop and the container and breaks the deploy. The bundled AAPL demo needs no credentials. Set `LLM_PROVIDER=google` to try Google before OpenAI; the default order is OpenAI then Google.
 
 ## Architecture (production)
 

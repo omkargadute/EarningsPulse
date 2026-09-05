@@ -20,16 +20,11 @@ image = (
 
 app = modal.App("earningspulse-api")
 
-# Durable Modal secret:
-#   uv run modal secret create earningspulse --from-dotenv backend/.env --force
-# Local .env is merged last so a redeploy from this machine can override values.
-secrets: list[modal.Secret] = [modal.Secret.from_name("earningspulse")]
-env_file = BACKEND_DIR / ".env"
-root_env_file = BACKEND_DIR.parent / ".env"
-if env_file.exists():
-    secrets.append(modal.Secret.from_dotenv(path=env_file))
-elif root_env_file.exists():
-    secrets.append(modal.Secret.from_dotenv(path=root_env_file))
+# Create/update with:
+#   cd backend && uv run modal secret create earningspulse --from-dotenv .env --force
+# Keep this list unconditional. Mixing Secret.from_dotenv only when a local
+# .env exists makes local and remote dependency counts diverge and breaks boot.
+secrets = [modal.Secret.from_name("earningspulse")]
 
 
 @app.function(
