@@ -19,6 +19,15 @@ async def clear_job_store():
     await job_store.clear()
 
 
+@pytest.fixture(autouse=True)
+def restore_demo_store_dir():
+    from app.api.routes import demo as demo_routes
+
+    original = demo_routes.demo_store._demo_dir  # noqa: SLF001
+    yield
+    demo_routes.demo_store._demo_dir = original  # noqa: SLF001
+
+
 @pytest.fixture
 async def client():
     transport = ASGITransport(app=app)
@@ -75,6 +84,50 @@ async def test_load_demo_playbook(client, seeded_demo):
     job = await job_store.get("demo_aapl")
     assert job.status == PlaybookStatus.COMPLETED
     assert job.playbook is not None
+
+
+@pytest.mark.asyncio
+async def test_load_demo_marks_prism_sync_result(client, seeded_demo):
+    store, _ = seeded_demo
+    from datetime import UTC, datetime
+    from unittest.mock import AsyncMock
+
+    from app.api.routes import demo as demo_routes
+    from app.models.trace import TraceEvent, TraceLog
+    from app.services.prism_client import get_prism_client
+
+    entry = store.load("AAPL")
+    assert entry is not None
+    entry.trace_log = TraceLog(
+        job_id="demo_aapl",
+        ticker="AAPL",
+        events=[
+            TraceEvent(
+                event_id="evt_demo",
+                job_id="demo_aapl",
+                event_type="run_started",
+                message="Started",
+                timestamp=datetime.now(UTC),
+            )
+        ],
+    )
+    store.save(entry)
+    demo_routes.demo_store._demo_dir = store.demo_dir  # noqa: SLF001
+
+    mock_prism = AsyncMock()
+    mock_prism.local_mode = False
+    mock_prism.sync_trace_log = AsyncMock(return_value=True)
+    app.dependency_overrides[get_prism_client] = lambda: mock_prism
+    try:
+        response = await client.post("/api/playbook/demo/AAPL")
+    finally:
+        app.dependency_overrides.pop(get_prism_client, None)
+
+    assert response.status_code == 200
+    # BackgroundTasks run after the response for ASGITransport
+    job = await job_store.get("demo_aapl")
+    assert job.prism_synced is True
+    mock_prism.sync_trace_log.assert_awaited_once()
 
 
 @pytest.mark.asyncio

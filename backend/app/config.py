@@ -54,6 +54,7 @@ class Settings(BaseSettings):
     cache_ttl_seconds: int = 300
 
     # PRISM (Block Convey)
+    prism_required: bool = False
     prism_api_key: str | None = None
     prism_project_id: str | None = None
     prism_host: str = "https://prism-api-prod.up.railway.app"

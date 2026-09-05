@@ -9,6 +9,7 @@ from pydantic import BaseModel
 
 from app.api.deps import get_job_store
 from app.models.playbook import PlaybookGenerateResponse, PlaybookStatus
+from app.models.trace import TraceLog
 from app.services.demo_store import DemoStore, demo_store
 from app.services.job_store import JobNotFoundError, JobStore
 from app.services.prism_client import PrismClient, get_prism_client
@@ -27,6 +28,12 @@ class DemoLoadResponse(PlaybookGenerateResponse):
 
 def get_demo_store() -> DemoStore:
     return demo_store
+
+
+async def sync_demo_trace(prism: PrismClient, store: JobStore, trace_log: TraceLog) -> None:
+    """Record the remote upload result for the demo trace API and export."""
+    synced = await prism.sync_trace_log(trace_log)
+    await store.mark_prism_synced(trace_log.job_id, synced)
 
 
 @router.get("", response_model=DemoListResponse)
@@ -82,7 +89,7 @@ async def load_demo_playbook(
         job = await job_store.get(job_id)
         job.trace_events = [event.model_dump(mode="json") for event in entry.trace_log.events]
         if not prism.local_mode:
-            background_tasks.add_task(prism.sync_trace_log, entry.trace_log)
+            background_tasks.add_task(sync_demo_trace, prism, job_store, entry.trace_log)
 
     return DemoLoadResponse(
         job_id=job_id,
