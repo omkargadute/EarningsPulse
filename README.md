@@ -313,3 +313,7 @@ uv run python ../scripts/backtest_reactions.py --tickers AAPL NVDA TSLA JPM AMZN
 ## Disclaimer
 
 Not financial advice. For informational and decision-support purposes only.
+
+This project has been made with the help of GIDE, Prism AI. 
+
+🧑‍💻 Developed by Omkar, Tushar, Ankush
