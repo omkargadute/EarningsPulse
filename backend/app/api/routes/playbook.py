@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
 from collections.abc import AsyncIterator
 from datetime import UTC, datetime
@@ -20,7 +19,7 @@ from app.models.playbook import (
 )
 from app.services.job_store import JobStore
 from app.services.playbook_runner import PlaybookJobRunner
-from app.services.sse_events import error_event, trace_event_to_sse
+from app.services.sse_events import error_event, playbook_ready_event, trace_event_to_sse
 from app.services.trace_store import TraceStore
 
 router = APIRouter(prefix="/playbook", tags=["playbook"])
@@ -113,59 +112,16 @@ async def stream_playbook_events(
     job = await store.get(job_id)
 
     async def event_generator() -> AsyncIterator[str]:
-        # Replay events that occurred before the client connected
-        for event in job.trace_events:
-            yield _format_sse(trace_event_to_sse(event))
+        async for event in store.iter_traces(job_id):
+            if event is None:
+                yield _format_sse({"type": "heartbeat", "job_id": job_id, "message": "keep-alive"})
+            else:
+                yield _format_sse(trace_event_to_sse(event))
 
-        if job.status in {PlaybookStatus.COMPLETED, PlaybookStatus.FAILED}:
-            if job.status == PlaybookStatus.COMPLETED:
-                yield _format_sse(
-                    {
-                        "type": "playbook_ready",
-                        "job_id": job_id,
-                        "ticker": job.ticker,
-                        "message": "Playbook already completed",
-                    }
-                )
-            elif job.error:
-                yield _format_sse(error_event(job_id, job.error))
-            return
-
-        while True:
-            try:
-                event = await asyncio.wait_for(job.event_queue.get(), timeout=120.0)
-            except TimeoutError:
-                yield _format_sse(
-                    {
-                        "type": "heartbeat",
-                        "job_id": job_id,
-                        "message": "keep-alive",
-                    }
-                )
-                refreshed = await store.get(job_id)
-                if refreshed.status in {
-                    PlaybookStatus.COMPLETED,
-                    PlaybookStatus.FAILED,
-                }:
-                    break
-                continue
-
-            yield _format_sse(event)
-
-            if event.get("type") in {"playbook_ready", "error"}:
-                break
-
-            refreshed = await store.get(job_id)
-            if refreshed.status in {PlaybookStatus.COMPLETED, PlaybookStatus.FAILED}:
-                if refreshed.status == PlaybookStatus.COMPLETED:
-                    yield _format_sse(
-                        {
-                            "type": "playbook_ready",
-                            "job_id": job_id,
-                            "ticker": refreshed.ticker,
-                        }
-                    )
-                break
+        if job.status == PlaybookStatus.COMPLETED:
+            yield _format_sse(playbook_ready_event(job_id, job.ticker))
+        else:
+            yield _format_sse(error_event(job_id, job.error or "Generation failed"))
 
     return StreamingResponse(
         event_generator(),

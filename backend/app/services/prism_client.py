@@ -9,7 +9,7 @@ from typing import Any
 import httpx
 
 from app.config import Settings, get_settings
-from app.models.trace import TraceEvent, TraceLog
+from app.models.trace import TraceLog
 from app.services.trace_store import trace_event_to_prism_step
 
 logger = logging.getLogger(__name__)
@@ -31,8 +31,6 @@ class PrismClient:
         self._local_mode = not self._settings.prism_enabled
         self._http: httpx.AsyncClient | None = None
         self._sdk: Any | None = None
-        self._buffers: dict[str, list[TraceEvent]] = {}
-        self._lock = asyncio.Lock()
 
         if not self._local_mode:
             self._init_sdk()
@@ -64,21 +62,8 @@ class PrismClient:
         except ImportError:
             logger.info("prismtrace-sdk not installed — using REST fallback for PRISM sync")
         except Exception as exc:
-            logger.warning("PRISM SDK initialization failed: %s", exc)
-            self._local_mode = True
-
-    async def emit(self, event: TraceEvent | dict[str, Any]) -> None:
-        """Buffer a trace event for batch sync to PRISM."""
-        if isinstance(event, TraceEvent):
-            trace_event = event
-        else:
-            trace_event = TraceEvent.model_validate(event)
-
-        if self._local_mode:
-            return
-
-        async with self._lock:
-            self._buffers.setdefault(trace_event.job_id, []).append(trace_event)
+            logger.warning("PRISM SDK initialization failed: %s — falling back to REST", exc)
+            self._sdk = None
 
     async def sync_trace_log(self, trace_log: TraceLog) -> bool:
         """
@@ -95,20 +80,26 @@ class PrismClient:
             return False
 
         try:
+            synced = False
             if self._sdk is not None:
-                synced = await asyncio.to_thread(
-                    self._submit_trajectory_sdk,
-                    trace_log,
-                    steps,
-                )
-            else:
+                try:
+                    synced = await asyncio.to_thread(
+                        self._submit_trajectory_sdk,
+                        trace_log,
+                        steps,
+                    )
+                except Exception as sdk_exc:
+                    logger.warning(
+                        "PRISM SDK sync failed for job %s: %s; falling back to REST",
+                        trace_log.job_id,
+                        sdk_exc,
+                    )
+
+            if not synced:
                 synced = await self._submit_trajectory_rest(trace_log, steps)
 
             if synced:
                 await self._submit_summary_trace(trace_log, steps)
-
-            async with self._lock:
-                self._buffers.pop(trace_log.job_id, None)
 
             if synced:
                 logger.info("PRISM sync completed for job %s", trace_log.job_id)
@@ -218,17 +209,24 @@ class PrismClient:
         }
         try:
             if self._sdk is not None:
-                await asyncio.to_thread(self._submit_summary_trace_sdk, trace_log, steps)
-            else:
-                client = await self._get_http_client()
-                url = f"{self._settings.prism_host.rstrip('/')}{PRISM_TRACE_PATH}"
-                response = await client.post(url, json=payload, headers=headers, timeout=30.0)
-                if response.status_code >= 400:
+                try:
+                    await asyncio.to_thread(self._submit_summary_trace_sdk, trace_log, steps)
+                    return
+                except Exception as sdk_exc:
                     logger.warning(
-                        "PRISM summary trace failed for job %s: %s",
+                        "PRISM SDK summary failed for job %s: %s — falling back to REST",
                         trace_log.job_id,
-                        response.text[:200],
+                        sdk_exc,
                     )
+            client = await self._get_http_client()
+            url = f"{self._settings.prism_host.rstrip('/')}{PRISM_TRACE_PATH}"
+            response = await client.post(url, json=payload, headers=headers, timeout=30.0)
+            if response.status_code >= 400:
+                logger.warning(
+                    "PRISM summary trace failed for job %s: %s",
+                    trace_log.job_id,
+                    response.text[:200],
+                )
         except Exception as exc:
             logger.warning(
                 "PRISM summary trace failed for job %s: %s",

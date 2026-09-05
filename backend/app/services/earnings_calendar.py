@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from datetime import date, datetime, timedelta
 
 import httpx
@@ -131,7 +132,9 @@ class EarningsCalendarService:
 
         # Prefer yfinance — Finnhub `period` is fiscal quarter-end, not report date.
         try:
-            result = self._fetch_historical_from_yfinance(normalized, limit)
+            result = await asyncio.to_thread(
+                self._fetch_historical_from_yfinance, normalized, limit
+            )
             if use_cache:
                 self._cache.set(cache_key, result, ttl_seconds=3600)
             return result
@@ -176,7 +179,7 @@ class EarningsCalendarService:
             except (ConfigurationError, ServiceError):
                 pass
 
-        return self._get_next_earnings_from_yfinance(normalized)
+        return await asyncio.to_thread(self._get_next_earnings_from_yfinance, normalized)
 
     async def _fetch_historical_from_finnhub(
         self,

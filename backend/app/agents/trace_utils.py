@@ -53,45 +53,52 @@ async def traced_tool(
     agent_name: str,
     tool_name: str,
     input_summary: dict[str, Any] | None = None,
-) -> AsyncIterator[list[TraceEvent]]:
-    """Context manager that yields a list to append trace events during tool execution."""
-    events: list[TraceEvent] = []
+    *,
+    events: list[dict[str, Any]],
+) -> AsyncIterator[None]:
+    """Record tool start and outcome in the agent trace, including handled failures."""
     started = time.perf_counter()
     events.append(
-        make_trace_event(
-            job_id,
-            TraceEventType.TOOL_CALL_STARTED,
-            f"{agent_name} calling {tool_name}",
-            agent_name=agent_name,
-            tool_name=tool_name,
-            input_summary=input_summary,
+        trace_to_dict(
+            make_trace_event(
+                job_id,
+                TraceEventType.TOOL_CALL_STARTED,
+                f"{agent_name} calling {tool_name}",
+                agent_name=agent_name,
+                tool_name=tool_name,
+                input_summary=input_summary,
+            )
         )
     )
     error: str | None = None
     try:
-        yield events
+        yield
     except Exception as exc:
         error = str(exc)
         events.append(
-            make_trace_event(
-                job_id,
-                TraceEventType.TOOL_CALL_FAILED,
-                f"{tool_name} failed: {exc}",
-                agent_name=agent_name,
-                tool_name=tool_name,
-                error=error,
-                latency_ms=int((time.perf_counter() - started) * 1000),
+            trace_to_dict(
+                make_trace_event(
+                    job_id,
+                    TraceEventType.TOOL_CALL_FAILED,
+                    f"{tool_name} failed: {exc}",
+                    agent_name=agent_name,
+                    tool_name=tool_name,
+                    error=error,
+                    latency_ms=int((time.perf_counter() - started) * 1000),
+                )
             )
         )
         raise
     else:
         events.append(
-            make_trace_event(
-                job_id,
-                TraceEventType.TOOL_CALL_COMPLETED,
-                f"{tool_name} completed",
-                agent_name=agent_name,
-                tool_name=tool_name,
-                latency_ms=int((time.perf_counter() - started) * 1000),
+            trace_to_dict(
+                make_trace_event(
+                    job_id,
+                    TraceEventType.TOOL_CALL_COMPLETED,
+                    f"{tool_name} completed",
+                    agent_name=agent_name,
+                    tool_name=tool_name,
+                    latency_ms=int((time.perf_counter() - started) * 1000),
+                )
             )
         )

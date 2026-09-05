@@ -1,11 +1,24 @@
 # EarningsPulse deployment guide
 
-Production: Vercel for the frontend, Railway or Render for the backend. Docker Compose is still the easiest local path.
+Deploy the **frontend** to Vercel. The **backend** supports Modal, Railway, Render, and Docker Compose for local or self-hosted stacks.
 
-The backend can also run as a Modal web function while the frontend remains on Vercel:
+| Platform | Best for |
+|----------|----------|
+| **Vercel** | Next.js frontend (required for production UI) |
+| **Railway / Render** | Long-lived Docker backend with persistent process |
+| **Modal** | Serverless FastAPI with quick setup; see [runtime limits](#runtime-and-storage-limits) |
+| **Docker Compose** | Local full-stack or self-hosted |
+
+See also: [backend/README.md](../backend/README.md), [frontend/README.md](../frontend/README.md).
+
+## Modal (serverless backend)
+
+The backend can run as a Modal web function while the frontend remains on Vercel:
 
 ```bash
-modal deploy backend/modal_app.py
+cd backend
+uv sync --frozen
+uv run modal deploy modal_app.py
 ```
 
 The initial Modal configuration accepts HTTPS origins under `vercel.app`, which makes
@@ -14,12 +27,28 @@ replace `CORS_ORIGIN_REGEX` in `backend/modal_app.py` with an exact `FRONTEND_UR
 redeploy. Set the frontend's `NEXT_PUBLIC_BACKEND_URL` to the `modal.run` URL printed by
 the deploy command, then redeploy the frontend because this value is baked in at build time.
 
+## Runtime and storage limits
+
+Jobs and their traces live in the API process. A restart loses generated playbooks and job status. Run one API process until shared job storage is implemented. The Modal configuration sets `max_containers=1`, but its five-minute idle scale-down still discards jobs.
+
+`TraceStore` also writes JSON files. Modal writes these to `/tmp/logs/traces` without a persistent volume, so they do not survive container replacement. These files contain traces, not recoverable playbooks. Download exports before relying on a saved run.
+
+Store provider keys in the Modal secret named `earningspulse`:
+
+```bash
+cd backend
+uv run modal secret create earningspulse --from-dotenv .env --force
+uv run modal deploy modal_app.py
+```
+
+Do not attach a local `.env` via `Secret.from_dotenv` in `modal_app.py`. That makes the secret list differ between your laptop and the container and breaks the deploy. The bundled AAPL demo needs no credentials. Set `LLM_PROVIDER=google` to try Google before OpenAI; the default order is OpenAI then Google.
+
 ## Architecture (production)
 
 ```mermaid
 flowchart TB
   User[Browser] --> Vercel[Vercel / Next.js 16]
-  Vercel -->|REST + SSE| API[Railway or Render / FastAPI]
+  User -->|REST + SSE| API[Modal, Railway or Render / FastAPI]
   API --> Orchestrator[LangGraph Orchestrator]
   Orchestrator --> Research[Research Agent]
   Orchestrator --> Forecast[Forecast Agent]
@@ -28,11 +57,11 @@ flowchart TB
   Orchestrator --> Synthesis[Synthesis Agent]
   Research --> Tavily[Tavily]
   Research --> EDGAR[SEC EDGAR]
-  Forecast --> OpenAI[OpenAI]
+  Forecast --> OpenAI[OpenAI / Google]
   Reaction --> YF[yfinance]
   Spillover --> YF
   Orchestrator --> Finnhub[Finnhub]
-  Orchestrator --> PRISM[PRISM optional]
+  Orchestrator --> PRISM[PRISM required for hackathon]
   API --> DemoCache[(demo/ cache)]
 ```
 
@@ -44,7 +73,7 @@ flowchart TB
 ## Prerequisites
 
 - GitHub repo connected to Vercel and Railway/Render
-- API keys from `.env.example` (OpenAI, Tavily, Finnhub minimum for live generation)
+- Provider settings from `.env.example`. OpenAI or Google supplies the LLM forecast (`LLM_PROVIDER` controls order); no LLM key uses heuristics. Tavily supplies research. Finnhub powers the calendar endpoint (yfinance fallback for ticker dates).
 - Demo cache at `backend/demo/aapl.json` (already in the repo)
 
 ## Step 1. Deploy backend (Railway)
@@ -58,12 +87,15 @@ flowchart TB
 |----------|----------|---------|
 | `ENVIRONMENT` | Yes | `production` |
 | `FRONTEND_URL` | Yes | `https://your-app.vercel.app` |
-| `OPENAI_API_KEY` | Yes (live gen) | `sk-...` |
+| `OPENAI_API_KEY` or `GOOGLE_API_KEY` | For LLM forecasts | Provider key |
+| `LLM_PROVIDER` | Optional | `openai` (default) or `google` |
 | `TAVILY_API_KEY` | Yes (live gen) | `tvly-...` |
 | `FINNHUB_API_KEY` | Recommended | `...` |
 | `SEC_USER_AGENT` | Yes | `EarningsPulse you@email.com` |
-| `PRISM_API_KEY` | Optional | From hackathon |
-| `PRISM_PROJECT_ID` | Optional | From hackathon |
+| `PRISM_API_KEY` | Hackathon | From Block Convey |
+| `PRISM_PROJECT_ID` | Hackathon | `de776c8e-0af3-4e09-9e93-15bc99b24c22` |
+| `PRISM_HOST` | Hackathon | `https://prism-api-prod.up.railway.app` |
+| `PRISM_REQUIRED` | Hackathon | `true` returns 503 from `/ready` until Prism is configured |
 
 `FRONTEND_URL` is merged into CORS automatically. You only need `CORS_ORIGINS` if you have multiple frontend domains.
 
@@ -88,9 +120,9 @@ flowchart TB
 
 | Variable | Value |
 |----------|-------|
-| `NEXT_PUBLIC_BACKEND_URL` | `https://<your-railway-or-render-api-url>` |
+| `NEXT_PUBLIC_BACKEND_URL` | `https://<your-backend-api-url>` |
 
-5. Deploy. Vercel detects Bun from `frontend/bun.lock` and uses `frontend/vercel.json` (`npm exec bun@1.4.0 install --frozen-lockfile`, then `next build` on Node). Do not enable the Bun Function runtime (`bunVersion`). Vercel's default installer is still Bun 1.3.x, which cannot read this lockfile (`lockfileVersion` 3).
+5. Deploy. Vercel detects Bun from `frontend/bun.lock` and uses `frontend/vercel.json` (`npm exec bun@1.4.0 install --frozen-lockfile`, then `next build` on Node). Do not enable the Bun Function runtime (`bunVersion`). The install command pins Bun for the checked-in lockfile.
 
 ## Step 3. Link frontend and backend
 
@@ -114,8 +146,8 @@ chmod +x scripts/verify_deployment.sh
 Manual checks:
 
 - [ ] Home page loads; disclaimer visible
-- [ ] Demo AAPL loads instantly (no API keys needed)
-- [ ] Live ticker generation completes in under 2 minutes
+- [ ] Demo AAPL loads without API keys
+- [ ] Live ticker generation completes; record elapsed time and any provider failures
 - [ ] Agent trace panel streams during generation
 - [ ] JSON export downloads
 - [ ] Calendar page loads
@@ -159,7 +191,7 @@ args:
 | Mode | API keys | Use case |
 |------|----------|----------|
 | Demo AAPL | None | Hackathon pitch, CI, offline fallback |
-| Live generation | OpenAI + Tavily + Finnhub | Full product demo |
+| Live generation | Provider keys enable their respective data sources | Current data and forecast, with fallback behavior when providers fail |
 
 Pre-warm before presenting:
 

@@ -23,7 +23,7 @@ GOOGLE_MODEL_FALLBACKS: tuple[str, ...] = (
 
 
 class LLMClient:
-    """OpenAI-first LLM wrapper with Google/Gemma fallback and heuristic default."""
+    """Configured provider first, then the other provider, then the heuristic."""
 
     def __init__(self, settings: Settings | None = None):
         self._settings = settings or get_settings()
@@ -41,7 +41,7 @@ class LLMClient:
     ) -> dict[str, Any]:
         """Return parsed JSON from the LLM, or fallback when unavailable."""
         if not self.enabled:
-            logger.info("LLM disabled — using deterministic fallback")
+            logger.info("LLM disabled; using deterministic fallback")
             return fallback
 
         messages = [
@@ -49,29 +49,20 @@ class LLMClient:
             HumanMessage(content=user_prompt),
         ]
 
-        if self._settings.openai_api_key:
+        providers = (
+            ("OpenAI", self._settings.openai_api_key, self._invoke_openai),
+            ("Google", self._settings.google_api_key, self._invoke_google),
+        )
+        if self._settings.llm_provider.lower().strip() == "google":
+            providers = providers[::-1]
+        for name, api_key, invoke in providers:
+            if not api_key:
+                continue
             try:
-                return await self._invoke_openai(messages, fallback)
+                return await invoke(messages, fallback)
             except Exception as exc:
-                logger.warning("OpenAI invocation failed: %s", exc)
-                if self._settings.google_api_key:
-                    logger.info("Trying Google LLM fallback")
-                    try:
-                        return await self._invoke_google(messages, fallback)
-                    except Exception as google_exc:
-                        logger.warning(
-                            "Google LLM invocation failed: %s — using fallback",
-                            google_exc,
-                        )
-                else:
-                    logger.warning("No Google fallback configured — using deterministic fallback")
-                return fallback
-
-        try:
-            return await self._invoke_google(messages, fallback)
-        except Exception as exc:
-            logger.warning("Google LLM invocation failed: %s — using fallback", exc)
-            return fallback
+                logger.warning("%s invocation failed: %s", name, exc)
+        return fallback
 
     async def _invoke_openai(
         self,

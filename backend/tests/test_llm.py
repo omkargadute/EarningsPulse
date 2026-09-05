@@ -161,3 +161,48 @@ async def test_invoke_json_google_tries_next_model_on_404(fallback):
 
     assert result == {"beat_probability": 0.6}
     success_model.generate_content.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_invalid_openai_json_keeps_existing_fallback_policy(fallback):
+    client = LLMClient(settings=Settings(openai_api_key="test", google_api_key="test"))
+    mock_llm = MagicMock()
+    mock_llm.ainvoke = AsyncMock(return_value=MagicMock(content="not JSON"))
+    with (
+        patch("langchain_openai.ChatOpenAI", return_value=mock_llm),
+        patch.object(client, "_invoke_google", new_callable=AsyncMock) as google,
+    ):
+        assert (
+            await client.invoke_json(system_prompt="sys", user_prompt="user", fallback=fallback)
+            == fallback
+        )
+    google.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "provider,expected", [("openai", ["openai", "google"]), (" Google ", ["google", "openai"])]
+)
+async def test_configured_provider_order_is_preserved(provider, expected, fallback):
+    client = LLMClient(
+        settings=Settings(openai_api_key="test", google_api_key="test", llm_provider=provider)
+    )
+    calls = []
+
+    async def openai(*args):
+        calls.append("openai")
+        raise RuntimeError("unavailable")
+
+    async def google(*args):
+        calls.append("google")
+        raise RuntimeError("unavailable")
+
+    with (
+        patch.object(client, "_invoke_openai", openai),
+        patch.object(client, "_invoke_google", google),
+    ):
+        assert (
+            await client.invoke_json(system_prompt="sys", user_prompt="user", fallback=fallback)
+            == fallback
+        )
+    assert calls == expected

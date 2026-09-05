@@ -38,7 +38,8 @@ class Settings(BaseSettings):
     anthropic_api_key: str | None = None
     llm_model: str = "gpt-4o"
     google_api_key: str | None = None
-    google_llm_model: str = "gemma-4-31b-it"
+    google_llm_model: str = "gemini-2.5-flash"
+    llm_provider: str = "openai"
 
     # Hackathon partners
     tavily_api_key: str | None = None
@@ -53,9 +54,10 @@ class Settings(BaseSettings):
     cache_ttl_seconds: int = 300
 
     # PRISM (Block Convey)
+    prism_required: bool = False
     prism_api_key: str | None = None
     prism_project_id: str | None = None
-    prism_host: str = "https://api.prism.blockconvey.com"
+    prism_host: str = "https://prism-api-prod.up.railway.app"
     trace_log_dir: str = "logs/traces"
     demo_cache_dir: str = "demo"
 

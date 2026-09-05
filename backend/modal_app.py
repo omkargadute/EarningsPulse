@@ -20,9 +20,16 @@ image = (
 
 app = modal.App("earningspulse-api")
 
+# Create/update with:
+#   cd backend && uv run modal secret create earningspulse --from-dotenv .env --force
+# Keep this list unconditional. Mixing Secret.from_dotenv only when a local
+# .env exists makes local and remote dependency counts diverge and breaks boot.
+secrets = [modal.Secret.from_name("earningspulse")]
+
 
 @app.function(
     image=image,
+    secrets=secrets,
     env={
         "ENVIRONMENT": "production",
         # Initial testing may use any Vercel preview or production hostname.

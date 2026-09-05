@@ -35,7 +35,7 @@ export function DemoButton() {
       >
         {loading ? "Opening the demo…" : `Demo ${DEMO_TICKER}`}
       </button>{" "}
-      opens a cached playbook instantly.
+      opens a cached playbook without running the agents.
       {error && <span className="ml-2 text-down">{error}</span>}
     </p>
   );

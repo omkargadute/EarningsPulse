@@ -14,7 +14,6 @@ from app.models.playbook import PlaybookStatus
 from app.models.trace import TraceEventType
 from app.services.job_store import JobStore, job_store
 from app.services.prism_client import PrismClient, get_prism_client
-from app.services.sse_events import error_event, playbook_ready_event, trace_event_to_sse
 from app.services.trace_store import TraceStore
 
 logger = logging.getLogger(__name__)
@@ -44,7 +43,7 @@ class PlaybookJobRunner:
         job_id: str | None = None,
         earnings_date: str | None = None,
     ) -> str:
-        """Create a job and schedule background execution."""
+        """Create a pending job. The API schedules execution."""
         normalized = ticker.upper().strip()
         job_id = job_id or f"job_{uuid.uuid4().hex[:12]}"
         await self._store.create(job_id, normalized, earnings_date=earnings_date)
@@ -86,11 +85,7 @@ class PlaybookJobRunner:
             if completed_event["event_id"] not in seen_trace_ids:
                 seen_trace_ids.add(completed_event["event_id"])
                 await self._store.append_trace(job_id, completed_event)
-                await self._store.publish_event(job_id, trace_event_to_sse(completed_event))
-                await self._prism.emit(completed_event)
 
-            ready = playbook_ready_event(job_id, job.ticker)
-            await self._store.publish_event(job_id, ready)
             await self._store.update_status(job_id, PlaybookStatus.COMPLETED, playbook=playbook)
             await self._finalize_trace(job_id)
         except Exception as exc:
@@ -104,11 +99,9 @@ class PlaybookJobRunner:
                     latency_ms=int((time.perf_counter() - started) * 1000),
                 )
             )
-            await self._store.append_trace(job_id, fail_event)
-            await self._store.publish_event(job_id, trace_event_to_sse(fail_event))
-            await self._prism.emit(fail_event)
-            await self._store.publish_event(job_id, error_event(job_id, str(exc)))
-            await self._store.update_status(job_id, PlaybookStatus.FAILED, error=str(exc))
+            await self._store.update_status(
+                job_id, PlaybookStatus.FAILED, error=str(exc), trace_event=fail_event
+            )
             await self._finalize_trace(job_id)
 
     async def _finalize_trace(self, job_id: str) -> None:
@@ -139,8 +132,6 @@ class PlaybookJobRunner:
             if event_id:
                 seen_trace_ids.add(event_id)
             await self._store.append_trace(job_id, raw_event)
-            await self._store.publish_event(job_id, trace_event_to_sse(raw_event))
-            await self._prism.emit(raw_event)
 
         if update.get("playbook") is not None:
             job = await self._store.get(job_id)
