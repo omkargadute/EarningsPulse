@@ -40,10 +40,13 @@ class SpilloverAgent:
 
         try:
             async with traced_tool(
-                job_id, AGENT_NAME, "peer_map", {"ticker": ticker}
-            ) as tool_events:
+                job_id,
+                AGENT_NAME,
+                "peer_map",
+                {"ticker": ticker},
+                events=trace_events,
+            ):
                 peer_result = await self._peer_map.build_peer_map(ticker, max_peers=10)
-                trace_events.extend(trace_to_dict(e) for e in tool_events)
             spillover: SpilloverMap = peer_map_to_spillover(peer_result)
         except Exception as exc:
             errors.append(f"peer_map: {exc}")

@@ -49,7 +49,7 @@ def _map_event_type(event_type: str) -> str:
         TraceEventType.AGENT_COMPLETED.value: SSE_AGENT_COMPLETE,
         TraceEventType.TOOL_CALL_STARTED.value: SSE_TOOL_CALL,
         TraceEventType.TOOL_CALL_COMPLETED.value: SSE_TOOL_CALL,
-        TraceEventType.TOOL_CALL_FAILED.value: SSE_ERROR,
+        TraceEventType.TOOL_CALL_FAILED.value: SSE_TOOL_CALL,
         TraceEventType.CONFIDENCE_UPDATED.value: SSE_TOOL_CALL,
     }
     return mapping.get(event_type, SSE_TOOL_CALL)

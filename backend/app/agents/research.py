@@ -74,10 +74,13 @@ class ResearchAgent:
         # Tavily — company news
         try:
             async with traced_tool(
-                job_id, AGENT_NAME, "tavily_company_news", {"ticker": ticker}
-            ) as tool_events:
+                job_id,
+                AGENT_NAME,
+                "tavily_company_news",
+                {"ticker": ticker},
+                events=trace_events,
+            ):
                 news = await self._tavily.search_company_news(ticker, company_name, days=90)
-                trace_events.extend(trace_to_dict(e) for e in tool_events)
             recent_news = [
                 {
                     "title": r.title,
@@ -98,10 +101,13 @@ class ResearchAgent:
         # Tavily — earnings preview
         try:
             async with traced_tool(
-                job_id, AGENT_NAME, "tavily_earnings_preview", {"ticker": ticker}
-            ) as tool_events:
+                job_id,
+                AGENT_NAME,
+                "tavily_earnings_preview",
+                {"ticker": ticker},
+                events=trace_events,
+            ):
                 preview = await self._tavily.search_earnings_preview(ticker, company_name)
-                trace_events.extend(trace_to_dict(e) for e in tool_events)
             if preview.answer:
                 analyst_context = (
                     f"{analyst_context}\n\n{preview.answer}".strip()
@@ -116,10 +122,13 @@ class ResearchAgent:
         # EDGAR filings
         try:
             async with traced_tool(
-                job_id, AGENT_NAME, "edgar_filings", {"ticker": ticker}
-            ) as tool_events:
+                job_id,
+                AGENT_NAME,
+                "edgar_filings",
+                {"ticker": ticker},
+                events=trace_events,
+            ):
                 filings = await self._edgar.get_filings(ticker)
-                trace_events.extend(trace_to_dict(e) for e in tool_events)
             sector = filings.company_name
             if filings.latest_quarterly:
                 filing_links.append(
@@ -159,9 +168,9 @@ class ResearchAgent:
                 AGENT_NAME,
                 "tavily_sector_context",
                 {"ticker": ticker},
-            ) as tool_events:
+                events=trace_events,
+            ):
                 sector_search = await self._tavily.search_sector_context(ticker)
-                trace_events.extend(trace_to_dict(e) for e in tool_events)
             sector_context = sector_search.answer or ""
             for r in sector_search.results[:2]:
                 sources.append({"title": r.title, "url": r.url, "source_type": "tavily"})
