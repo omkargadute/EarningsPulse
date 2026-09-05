@@ -49,12 +49,12 @@ class ReactionAgent:
                     "limit": settings.reaction_history_limit,
                     "backtest_years_target": 10,
                 },
-            ) as tool_events:
+                events=trace_events,
+            ):
                 analysis = await self._analyzer.analyze_ticker(
                     ticker,
                     limit=settings.reaction_history_limit,
                 )
-                trace_events.extend(trace_to_dict(e) for e in tool_events)
             reaction: ReactionAnalysisSummary = reaction_analysis_to_summary(analysis)
         except Exception as exc:
             errors.append(f"reaction_analyzer: {exc}")

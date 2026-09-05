@@ -1,8 +1,9 @@
-"""In-memory playbook generation job store with SSE event queues."""
+"""In-memory playbook generation job store with independent trace readers."""
 
 from __future__ import annotations
 
 import asyncio
+from collections.abc import AsyncIterator
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
@@ -20,7 +21,7 @@ class PlaybookJob:
     playbook: Playbook | None = None
     error: str | None = None
     trace_events: list[dict[str, Any]] = field(default_factory=list)
-    event_queue: asyncio.Queue[dict[str, Any]] = field(default_factory=asyncio.Queue)
+    changed: asyncio.Condition = field(default_factory=asyncio.Condition)
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     completed_at: datetime | None = None
     earnings_date: str | None = None
@@ -32,7 +33,7 @@ class JobNotFoundError(KeyError):
 
 
 class JobStore:
-    """Thread-safe in-memory store for playbook jobs."""
+    """Single-process job storage for one asyncio event loop."""
 
     def __init__(self) -> None:
         self._jobs: dict[str, PlaybookJob] = {}
@@ -68,15 +69,19 @@ class JobStore:
         *,
         playbook: Playbook | None = None,
         error: str | None = None,
+        trace_event: dict[str, Any] | None = None,
     ) -> PlaybookJob:
         job = await self.get(job_id)
-        job.status = status
-        if playbook is not None:
-            job.playbook = playbook
-        if error is not None:
+        async with job.changed:
+            job.status = status
+            if playbook is not None:
+                job.playbook = playbook
             job.error = error
-        if status in {PlaybookStatus.COMPLETED, PlaybookStatus.FAILED}:
-            job.completed_at = datetime.now(UTC)
+            if status in {PlaybookStatus.COMPLETED, PlaybookStatus.FAILED}:
+                job.completed_at = datetime.now(UTC)
+            if trace_event is not None:
+                job.trace_events.append(trace_event)
+            job.changed.notify_all()
         return job
 
     async def mark_prism_synced(self, job_id: str, synced: bool = True) -> None:
@@ -85,11 +90,36 @@ class JobStore:
 
     async def append_trace(self, job_id: str, event: dict[str, Any]) -> None:
         job = await self.get(job_id)
-        job.trace_events.append(event)
+        async with job.changed:
+            job.trace_events.append(event)
+            job.changed.notify_all()
 
-    async def publish_event(self, job_id: str, event: dict[str, Any]) -> None:
+    async def iter_traces(
+        self, job_id: str, *, heartbeat_seconds: float = 120.0
+    ) -> AsyncIterator[dict[str, Any] | None]:
+        """Replay and follow traces per reader. None requests a transport heartbeat."""
         job = await self.get(job_id)
-        await job.event_queue.put(event)
+        cursor = 0
+        while True:
+            async with job.changed:
+                terminal = job.status in {PlaybookStatus.COMPLETED, PlaybookStatus.FAILED}
+                events = job.trace_events[cursor:]
+                cursor += len(events)
+                if not events and not terminal:
+                    try:
+                        await asyncio.wait_for(job.changed.wait(), timeout=heartbeat_seconds)
+                    except TimeoutError:
+                        heartbeat = True
+                    else:
+                        continue
+                else:
+                    heartbeat = False
+            for event in events:
+                yield event
+            if terminal:
+                return
+            if heartbeat:
+                yield None
 
     async def list_jobs(self, limit: int = 50) -> list[PlaybookJob]:
         async with self._lock:
@@ -101,7 +131,7 @@ class JobStore:
             return jobs[:limit]
 
     async def clear(self) -> None:
-        """Clear all jobs — for testing only."""
+        """Clear all jobs for testing."""
         async with self._lock:
             self._jobs.clear()
 
