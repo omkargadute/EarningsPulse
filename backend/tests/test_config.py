@@ -21,3 +21,9 @@ def test_frontend_url_not_duplicated_in_cors():
         ],
     )
     assert settings.cors_origins.count("https://earningspulse.vercel.app") == 1
+
+
+def test_cors_origin_regex_can_be_configured_for_preview_deployments():
+    settings = Settings(cors_origin_regex=r"https://.*\.vercel\.app")
+
+    assert settings.cors_origin_regex == r"https://.*\.vercel\.app"
