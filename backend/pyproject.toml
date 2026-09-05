@@ -25,6 +25,7 @@ dev = [
     "pytest==8.3.4",
     "pytest-asyncio==0.25.0",
     "hypothesis==6.138.5",
+    "modal==1.5.5",
     "ruff>=0.8.0",
     "ty>=0.0.78",
     "deptry>=0.25.1",
@@ -68,3 +69,5 @@ include = ["app", "tests"]
 [tool.deptry.per_rule_ignores]
 # uvicorn is the ASGI process. python-dotenv is loaded via pydantic-settings env_file.
 DEP002 = ["uvicorn", "python-dotenv"]
+# modal_app.py is a deployment entry point, so Modal is intentionally development-only.
+DEP004 = ["modal"]
