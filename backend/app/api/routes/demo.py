@@ -4,13 +4,14 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from pydantic import BaseModel
 
 from app.api.deps import get_job_store
 from app.models.playbook import PlaybookGenerateResponse, PlaybookStatus
 from app.services.demo_store import DemoStore, demo_store
 from app.services.job_store import JobNotFoundError, JobStore
+from app.services.prism_client import PrismClient, get_prism_client
 
 router = APIRouter(prefix="/playbook/demo", tags=["demo"])
 
@@ -39,8 +40,10 @@ async def list_demo_tickers(
 @router.post("/{ticker}", response_model=DemoLoadResponse)
 async def load_demo_playbook(
     ticker: str,
+    background_tasks: BackgroundTasks,
     demo: DemoStore = Depends(get_demo_store),
     job_store: JobStore = Depends(get_job_store),
+    prism: PrismClient = Depends(get_prism_client),
 ) -> DemoLoadResponse:
     """
     Create an instantly-completed job from a pre-cached demo playbook.
@@ -78,6 +81,8 @@ async def load_demo_playbook(
     if entry.trace_log:
         job = await job_store.get(job_id)
         job.trace_events = [event.model_dump(mode="json") for event in entry.trace_log.events]
+        if not prism.local_mode:
+            background_tasks.add_task(prism.sync_trace_log, entry.trace_log)
 
     return DemoLoadResponse(
         job_id=job_id,

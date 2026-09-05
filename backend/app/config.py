@@ -56,7 +56,7 @@ class Settings(BaseSettings):
     # PRISM (Block Convey)
     prism_api_key: str | None = None
     prism_project_id: str | None = None
-    prism_host: str = "https://api.prism.blockconvey.com"
+    prism_host: str = "https://prism-api-prod.up.railway.app"
     trace_log_dir: str = "logs/traces"
     demo_cache_dir: str = "demo"
 

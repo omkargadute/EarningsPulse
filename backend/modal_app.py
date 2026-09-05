@@ -20,9 +20,18 @@ image = (
 
 app = modal.App("earningspulse-api")
 
+secrets: list[modal.Secret] = []
+env_file = BACKEND_DIR / ".env"
+root_env_file = BACKEND_DIR.parent / ".env"
+if env_file.exists():
+    secrets.append(modal.Secret.from_dotenv(path=env_file))
+elif root_env_file.exists():
+    secrets.append(modal.Secret.from_dotenv(path=root_env_file))
+
 
 @app.function(
     image=image,
+    secrets=secrets,
     env={
         "ENVIRONMENT": "production",
         # Initial testing may use any Vercel preview or production hostname.

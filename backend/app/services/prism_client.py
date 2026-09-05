@@ -64,8 +64,8 @@ class PrismClient:
         except ImportError:
             logger.info("prismtrace-sdk not installed — using REST fallback for PRISM sync")
         except Exception as exc:
-            logger.warning("PRISM SDK initialization failed: %s", exc)
-            self._local_mode = True
+            logger.warning("PRISM SDK initialization failed: %s — falling back to REST", exc)
+            self._sdk = None
 
     async def emit(self, event: TraceEvent | dict[str, Any]) -> None:
         """Buffer a trace event for batch sync to PRISM."""
