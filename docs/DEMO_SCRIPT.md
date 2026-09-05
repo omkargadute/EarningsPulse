@@ -99,3 +99,4 @@ Optional: click Export JSON or Print / PDF to show the deliverable.
 - [ ] One live generation tested end-to-end
 - [ ] Export button tested once
 - [ ] Calendar page loads (optional 10s mention of upcoming earnings)
+- [ ] Calendar page loads (optional 10s mention of upcoming earnings)
