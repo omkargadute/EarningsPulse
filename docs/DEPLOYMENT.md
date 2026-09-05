@@ -1,8 +1,19 @@
 # EarningsPulse deployment guide
 
-The frontend runs on Vercel. The repository includes backend configurations for Modal, Railway, and Render, plus Docker Compose for local use.
+Deploy the **frontend** to Vercel. The **backend** supports Modal, Railway, Render, and Docker Compose for local or self-hosted stacks.
 
-The backend can also run as a Modal web function while the frontend remains on Vercel:
+| Platform | Best for |
+|----------|----------|
+| **Vercel** | Next.js frontend (required for production UI) |
+| **Railway / Render** | Long-lived Docker backend with persistent process |
+| **Modal** | Serverless FastAPI with quick setup; see [runtime limits](#runtime-and-storage-limits) |
+| **Docker Compose** | Local full-stack or self-hosted |
+
+See also: [backend/README.md](../backend/README.md), [frontend/README.md](../frontend/README.md).
+
+## Modal (serverless backend)
+
+The backend can run as a Modal web function while the frontend remains on Vercel:
 
 ```bash
 cd backend
@@ -46,7 +57,7 @@ flowchart TB
   Orchestrator --> Synthesis[Synthesis Agent]
   Research --> Tavily[Tavily]
   Research --> EDGAR[SEC EDGAR]
-  Forecast --> OpenAI[OpenAI]
+  Forecast --> OpenAI[OpenAI / Google]
   Reaction --> YF[yfinance]
   Spillover --> YF
   Orchestrator --> Finnhub[Finnhub]
@@ -62,7 +73,7 @@ flowchart TB
 ## Prerequisites
 
 - GitHub repo connected to Vercel and Railway/Render
-- Provider settings from `.env.example`. OpenAI or Google supplies the LLM forecast; no LLM key uses heuristics. Tavily supplies research, and Finnhub is required for the upcoming-calendar endpoint.
+- Provider settings from `.env.example`. OpenAI or Google supplies the LLM forecast (`LLM_PROVIDER` controls order); no LLM key uses heuristics. Tavily supplies research. Finnhub powers the calendar endpoint (yfinance fallback for ticker dates).
 - Demo cache at `backend/demo/aapl.json` (already in the repo)
 
 ## Step 1. Deploy backend (Railway)
@@ -77,6 +88,7 @@ flowchart TB
 | `ENVIRONMENT` | Yes | `production` |
 | `FRONTEND_URL` | Yes | `https://your-app.vercel.app` |
 | `OPENAI_API_KEY` or `GOOGLE_API_KEY` | For LLM forecasts | Provider key |
+| `LLM_PROVIDER` | Optional | `openai` (default) or `google` |
 | `TAVILY_API_KEY` | Yes (live gen) | `tvly-...` |
 | `FINNHUB_API_KEY` | Recommended | `...` |
 | `SEC_USER_AGENT` | Yes | `EarningsPulse you@email.com` |

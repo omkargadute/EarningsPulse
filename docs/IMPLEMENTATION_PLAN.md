@@ -4,9 +4,9 @@ Build plan for shipping EarningsPulse as a hackathon project. Companion: [PROJEC
 
 Approach: one Cursor agent ran phases in order with user review at checkpoints.
 
-**Status:** All 10 phases complete (Phases 0–9 merged to `main`; latest Phase 9 PR #9, commit `64016c7`).
+**Status:** All 10 phases complete (Phases 0–9 merged to `main`; latest Phase 9 PR #9, commit `64016c7`). Post-ship: Modal deploy, provider selection (OpenAI/Google), maintainability review — see [MAINTAINABILITY_REVIEW.md](./MAINTAINABILITY_REVIEW.md).
 
-**Still before the hackathon:** deploy to Railway + Vercel, run `scripts/verify_deployment.sh`, rehearse [DEMO_SCRIPT.md](./DEMO_SCRIPT.md), tag `v1.0.0`.
+**Still before presenting:** deploy to Railway/Modal + Vercel, run `scripts/verify_deployment.sh`, rehearse [DEMO_SCRIPT.md](./DEMO_SCRIPT.md), tag `v1.0.0`.
 
 ## Table of contents
 
@@ -34,7 +34,7 @@ Yes, with a Cursor coding agent, if the user supplies keys and runs the demo.
 | Requirement | Who provides it | Notes |
 | ------------------- | -------------------- | --------------------------------------------------------------------- |
 | Code implementation | AI agent | Backend, frontend, agents, tests |
-| API keys | User | OpenAI/Anthropic, Tavily, Finnhub (free tier), optional PRISM credentials |
+| API keys | User | OpenAI and/or Google, Tavily, Finnhub (free tier), optional PRISM credentials |
 | PRISM access | User / hackathon | Block Convey provides at the event; stub locally until then |
 | Design decisions | AI agent | Follow the spec; user reviews at checkpoints |
 | Deployment | AI agent | Vercel + Railway/Render or all-in-one Docker |
@@ -117,7 +117,7 @@ Yes, with a Cursor coding agent, if the user supplies keys and runs the demo.
 | Charts | lightweight-charts | OHLCV reaction workspace (candles, paths, reference lines) |
 | Backend | Python 3.12 + FastAPI | Strong ecosystem for finance data and AI agents |
 | Agent framework | LangGraph | Multi-agent orchestration with state |
-| LLM | OpenAI GPT-4o (primary) | Tool calling and synthesis quality; Anthropic as fallback |
+| LLM | OpenAI GPT-4o (primary) + Google/Gemma fallback | Tool calling and synthesis quality; heuristic when no key |
 | Web research | Tavily API | Hackathon partner, built for agents |
 | Price data | yfinance | Free historical OHLCV |
 | Earnings dates | Finnhub free tier | Clean earnings calendar API |
@@ -133,74 +133,44 @@ Yes, with a Cursor coding agent, if the user supplies keys and runs the demo.
 EarningsPulse/
 ├── docs/
 │   ├── PROJECT_SPEC.md
-│   └── IMPLEMENTATION_PLAN.md
+│   ├── IMPLEMENTATION_PLAN.md
+│   ├── DEPLOYMENT.md
+│   ├── DEMO_SCRIPT.md
+│   └── MAINTAINABILITY_REVIEW.md
 ├── backend/
+│   ├── README.md
 │   ├── app/
-│   │   ├── main.py                    # FastAPI entry
-│   │   ├── config.py                  # Settings & env vars
-│   │   ├── api/
-│   │   │   ├── routes/
-│   │   │   │   ├── playbook.py        # Generate + stream endpoints
-│   │   │   │   ├── calendar.py        # Upcoming earnings
-│   │   │   │   └── health.py
-│   │   │   └── deps.py
-│   │   ├── agents/
-│   │   │   ├── orchestrator.py        # LangGraph workflow
-│   │   │   ├── research.py
-│   │   │   ├── forecast.py
-│   │   │   ├── reaction.py
-│   │   │   ├── spillover.py
-│   │   │   └── synthesis.py
-│   │   ├── services/
-│   │   │   ├── tavily_client.py
-│   │   │   ├── price_data.py          # yfinance wrapper
-│   │   │   ├── earnings_calendar.py   # Finnhub wrapper
-│   │   │   ├── edgar_client.py
-│   │   │   ├── peer_map.py            # Sector taxonomy + correlation
-│   │   │   ├── reaction_analyzer.py   # Pattern classification engine
-│   │   │   └── prism_client.py        # PRISM observability
+│   │   ├── main.py
+│   │   ├── config.py
+│   │   ├── api/routes/          # health, playbook, demo, calendar, trace
+│   │   ├── agents/                # orchestrator + 5 agents + llm + mappers
+│   │   ├── services/              # data clients, analyzers, job store, PRISM
 │   │   ├── models/
-│   │   │   ├── playbook.py            # Pydantic schemas
-│   │   │   ├── agent_state.py
-│   │   │   └── trace.py
 │   │   └── utils/
-│   │       ├── cache.py
-│   │       └── confidence.py
+│   ├── demo/                      # Pre-cached AAPL playbook
 │   ├── tests/
-│   │   ├── test_reaction_analyzer.py
-│   │   ├── test_peer_map.py
-│   │   ├── test_agents.py
-│   │   └── test_api.py
-│   ├── requirements.txt
+│   ├── modal_app.py
+│   ├── pyproject.toml             # uv deps + ruff + ty
+│   ├── uv.lock
 │   └── Dockerfile
 ├── frontend/
+│   ├── README.md
 │   ├── src/
-│   │   ├── app/
-│   │   │   ├── page.tsx               # Landing + input
-│   │   │   ├── playbook/[id]/page.tsx
-│   │   │   └── calendar/page.tsx
-│   │   ├── components/
-│   │   │   ├── TickerInput.tsx
-│   │   │   ├── RunPanel.tsx           # PRISM live trace (dark surface)
-│   │   │   ├── PlaybookView.tsx
-│   │   │   ├── ScenarioTree.tsx
-│   │   │   ├── reaction/
-│   │   │   │   ├── ReactionWorkspace.tsx
-│   │   │   │   ├── ReactionCandleChart.tsx
-│   │   │   │   └── ReactionMoveHistogram.tsx
-│   │   │   ├── PeerSpilloverTable.tsx
-│   │   │   └── ConfidenceBadge.tsx
+│   │   ├── app/                   # page.tsx, playbook/[id], calendar
+│   │   ├── components/            # RunPanel, PlaybookView, reaction/*
 │   │   ├── lib/
-│   │   │   ├── api.ts
-│   │   │   └── types.ts
-│   │   └── hooks/
-│   │       └── usePlaybookStream.ts   # SSE hook
+│   │   └── hooks/usePlaybookStream.ts
+│   ├── e2e/
+│   ├── tests/                     # Hegel property tests
 │   ├── package.json
 │   └── Dockerfile
 ├── scripts/
-│   ├── backtest_reactions.py          # Validate pattern engine
-│   └── seed_demo.py                   # Pre-cache demo ticker
+│   ├── backtest_reactions.py
+│   ├── seed_demo.py
+│   ├── run_tests.sh
+│   └── verify_deployment.sh
 ├── docker-compose.yml
+├── render.yaml
 ├── .env.example
 └── README.md
 ```
@@ -210,8 +180,10 @@ EarningsPulse/
 ### Required environment variables
 
 ```bash
-# LLM
+# LLM (at least one recommended for live forecasts)
 OPENAI_API_KEY=sk-...
+LLM_PROVIDER=openai          # or google — tries configured provider first
+GOOGLE_API_KEY=...
 
 # Hackathon partners
 TAVILY_API_KEY=tvly-...
@@ -226,13 +198,16 @@ PRISM_PROJECT_ID=...
 # App
 BACKEND_URL=http://localhost:8000
 FRONTEND_URL=http://localhost:3000
+NEXT_PUBLIC_BACKEND_URL=http://localhost:8000
 ```
 
 ### Optional
 
 ```bash
-ANTHROPIC_API_KEY=...         # LLM fallback
-REDIS_URL=...                 # Production cache
+REACTION_HISTORY_LIMIT=40
+MONTE_CARLO_SIMULATIONS=1000
+VALIDATION_TRAIN_RATIO=0.7
+REDIS_URL=...                 # Not wired; in-memory cache only
 ```
 
 ## 6. Implementation phases
@@ -257,7 +232,7 @@ Phases are sequential. All phases merged to `main` as of September 3, 2026.
 ### Phase 0. Foundation
 
 - [x] Initialize monorepo with `backend/` and `frontend/` directories
-- [x] Set up Python virtual environment, `requirements.txt` (FastAPI, LangGraph, yfinance, httpx, pydantic, etc.)
+- [x] Set up Python project with `pyproject.toml` + uv (FastAPI, LangGraph, yfinance, httpx, pydantic, etc.)
 - [x] Set up Next.js 16 with TypeScript 7, Tailwind, custom glass UI
 - [x] Create `.env.example` with all required keys documented
 - [x] Create `docker-compose.yml` for local dev (backend + frontend)
@@ -295,6 +270,9 @@ Phases are sequential. All phases merged to `main` as of September 3, 2026.
   - Output per event: direction, dip %, recovery %, time-to-bottom
   - Aggregate: archetype classification, avg dip, avg recovery, pattern frequency
   - Classify into archetypes (Dip-Then-Rally, Immediate Rip, etc.)
+- [x] `monte_carlo.py`: Bootstrap p10/p50/p90 reaction bands from historical events
+- [x] `reaction_validation.py`: Chronological train/test overfit check
+- [x] `reaction_chart.py`: Chart workspace payload for the frontend
 - [x] `peer_map.py`: Spillover engine
   - Static sector taxonomy (GICS-based peer groups for major sectors)
   - Dynamic correlation: compute return correlation on past earnings dates
@@ -689,10 +667,12 @@ class PrismClient:
 ### Documentation
 
 - [x] README with setup and architecture
+- [x] backend/README.md and frontend/README.md
 - [x] PROJECT_SPEC.md
 - [x] IMPLEMENTATION_PLAN.md
 - [x] DEMO_SCRIPT.md
 - [x] DEPLOYMENT.md
+- [x] MAINTAINABILITY_REVIEW.md
 - [x] .env.example with all keys documented
 
 ## 14. Risks and mitigations
@@ -768,4 +748,4 @@ Phase 9: Deploy + docs + demo script (merged PR #9)
 
 ---
 
-Document version 1.3. Created September 3, 2026. Updated September 4, 2026 (reaction workspace, layout tokens, design system refresh).
+Document version 1.4. Created September 3, 2026. Updated September 4, 2026 (reaction workspace, layout tokens, design system refresh). Updated September 5, 2026 (Modal, Google LLM, Monte Carlo/validation, README split, maintainability review).
