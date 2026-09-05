@@ -9,7 +9,7 @@
 - [ ] Production URLs open in browser tabs (home + one completed playbook)
 - [ ] Demo AAPL tested 3× on production (`scripts/verify_deployment.sh`)
 - [ ] Optional: one live generation pre-warmed for your chosen ticker
-- [ ] PRISM dashboard open if credentials are available
+- [ ] PRISM dashboard open (required for the hackathon)
 - [ ] Fallback: stay on Demo AAPL if WiFi or APIs fail
 
 Recommended demo ticker: AAPL (cached) or whatever reports that evening (live).
@@ -44,13 +44,7 @@ Recommended demo ticker: AAPL (cached) or whatever reports that evening (live).
 
 **Screen:** Scroll the trace panel; highlight two or three tool calls with sources.
 
-**If PRISM is connected:**
-
 > "The full trajectory syncs to Block Convey PRISM for audit and replay."
-
-**If PRISM is unavailable:**
-
-> "Traces are stored locally in the same PRISM-compatible format, ready to sync when credentials show up."
 
 ## Minute 2:00–2:45. Playbook highlights
 
@@ -82,7 +76,7 @@ Optional: click Export JSON or Print / PDF to show the deliverable.
 |---------|----------|
 | Live generation timeout | Switch to Demo AAPL (same UI, instant) |
 | Tavily / Finnhub down | Demo AAPL; mention graceful degradation on the live path |
-| PRISM unavailable | Local trace panel still works; narrate from SSE events |
+| PRISM sync fails | Local trace panel still works; retry after confirming PRISM_API_KEY |
 | Projector / browser issue | Pre-opened playbook tab as backup |
 
 ## Q&A prep (optional)

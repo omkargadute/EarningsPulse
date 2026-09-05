@@ -227,3 +227,38 @@ async def test_prism_client_sync_with_rest_fallback(trace_settings):
     assert "traces" in trace_call.args[0]
     assert trajectory_call.kwargs["json"]["project_id"] == "proj_test"
     assert len(trajectory_call.kwargs["json"]["steps"]) == 2
+
+
+@pytest.mark.asyncio
+async def test_prism_client_falls_back_to_rest_when_sdk_returns_false(trace_settings):
+    settings = trace_settings.model_copy(
+        update={
+            "prism_api_key": "pt-sk-test-key",
+            "prism_project_id": "proj_test",
+        }
+    )
+    client = PrismClient(settings=settings)
+    client._sdk = object()  # present but unused; SDK path is mocked
+    assert client.local_mode is False
+
+    trace_log = TraceLog(
+        job_id="job_sdk_fallback",
+        ticker="AAPL",
+        events=[make_trace_event("job_sdk_fallback", TraceEventType.RUN_STARTED, "Started")],
+    )
+
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.text = "ok"
+    mock_http = AsyncMock()
+    mock_http.post = AsyncMock(return_value=mock_response)
+    mock_http.is_closed = False
+
+    with (
+        patch.object(client, "_submit_trajectory_sdk", return_value=False),
+        patch.object(client, "_get_http_client", AsyncMock(return_value=mock_http)),
+    ):
+        synced = await client.sync_trace_log(trace_log)
+
+    assert synced is True
+    assert mock_http.post.await_count == 2

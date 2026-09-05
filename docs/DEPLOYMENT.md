@@ -42,7 +42,7 @@ flowchart TB
   Reaction --> YF[yfinance]
   Spillover --> YF
   Orchestrator --> Finnhub[Finnhub]
-  Orchestrator --> PRISM[PRISM optional]
+  Orchestrator --> PRISM[PRISM required for hackathon]
   API --> DemoCache[(demo/ cache)]
 ```
 
@@ -72,8 +72,10 @@ flowchart TB
 | `TAVILY_API_KEY` | Yes (live gen) | `tvly-...` |
 | `FINNHUB_API_KEY` | Recommended | `...` |
 | `SEC_USER_AGENT` | Yes | `EarningsPulse you@email.com` |
-| `PRISM_API_KEY` | Optional | From hackathon |
-| `PRISM_PROJECT_ID` | Optional | From hackathon |
+| `PRISM_API_KEY` | Hackathon | From Block Convey |
+| `PRISM_PROJECT_ID` | Hackathon | `de776c8e-0af3-4e09-9e93-15bc99b24c22` |
+| `PRISM_HOST` | Hackathon | `https://prism-api-prod.up.railway.app` |
+| `PRISM_REQUIRED` | Hackathon | `true` returns 503 from `/ready` until Prism is configured |
 
 `FRONTEND_URL` is merged into CORS automatically. You only need `CORS_ORIGINS` if you have multiple frontend domains.
 
