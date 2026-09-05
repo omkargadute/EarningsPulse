@@ -20,7 +20,10 @@ image = (
 
 app = modal.App("earningspulse-api")
 
-secrets: list[modal.Secret] = []
+# Durable Modal secret:
+#   uv run modal secret create earningspulse --from-dotenv backend/.env --force
+# Local .env is merged last so a redeploy from this machine can override values.
+secrets: list[modal.Secret] = [modal.Secret.from_name("earningspulse")]
 env_file = BACKEND_DIR / ".env"
 root_env_file = BACKEND_DIR.parent / ".env"
 if env_file.exists():
