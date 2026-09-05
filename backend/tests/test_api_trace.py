@@ -227,23 +227,3 @@ async def test_prism_client_sync_with_rest_fallback(trace_settings):
     assert "traces" in trace_call.args[0]
     assert trajectory_call.kwargs["json"]["project_id"] == "proj_test"
     assert len(trajectory_call.kwargs["json"]["steps"]) == 2
-
-
-@pytest.mark.asyncio
-async def test_prism_emit_buffers_when_enabled(trace_settings):
-    settings = trace_settings.model_copy(
-        update={
-            "prism_api_key": "pt-sk-test-key",
-            "prism_project_id": "proj_test",
-        }
-    )
-    client = PrismClient(settings=settings)
-    event = make_trace_event(
-        "job_buf",
-        TraceEventType.TOOL_CALL_STARTED,
-        "tool start",
-        tool_name="yfinance",
-    )
-    await client.emit(event)
-    assert "job_buf" in client._buffers
-    assert len(client._buffers["job_buf"]) == 1

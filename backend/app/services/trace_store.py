@@ -54,7 +54,7 @@ class TraceStore:
             raise
 
     async def save_trace_log(self, trace_log: TraceLog) -> Path:
-        """Persist trace log to local JSON (always, for audit/export)."""
+        """Write a local JSON trace. Durability depends on the configured filesystem."""
         self._log_dir.mkdir(parents=True, exist_ok=True)
         path = self._log_dir / f"{trace_log.job_id}.json"
         payload = trace_log.model_dump(mode="json")

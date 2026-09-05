@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from datetime import date, timedelta
 from statistics import mean, median
 from typing import Any
@@ -93,14 +94,17 @@ class ReactionAnalyzer:
             use_cache=use_cache,
         )
 
-        events, all_bars = self._analyze_events_batch(
+        events, all_bars = await asyncio.to_thread(
+            self._analyze_events_batch,
             normalized,
             historical.events,
             window_days=window,
             use_cache=use_cache,
         )
 
-        options_data = self._price.get_options_implied_move(normalized, use_cache=use_cache)
+        options_data = await asyncio.to_thread(
+            self._price.get_options_implied_move, normalized, use_cache=use_cache
+        )
         result = self.aggregate_events(normalized, events, options_data=options_data)
 
         result.monte_carlo = simulate_reaction_paths(
@@ -118,7 +122,13 @@ class ReactionAnalyzer:
             latest = max(events, key=_earnings_date)
             if latest.baseline_price is not None:
                 latest_bars = self._price.slice_window_bars(
-                    self._load_bars_for_event(normalized, latest.earnings_date, window, use_cache),
+                    await asyncio.to_thread(
+                        self._load_bars_for_event,
+                        normalized,
+                        latest.earnings_date,
+                        window,
+                        use_cache,
+                    ),
                     latest.earnings_date,
                     window_days=window,
                 )
@@ -128,7 +138,8 @@ class ReactionAnalyzer:
                 )
 
         if all_bars and events:
-            chart_bars = ensure_chart_history_bars(
+            chart_bars = await asyncio.to_thread(
+                ensure_chart_history_bars,
                 normalized,
                 events,
                 all_bars,
